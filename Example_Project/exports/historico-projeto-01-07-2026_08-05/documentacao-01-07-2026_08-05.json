@@ -1,0 +1,25 @@
+{
+  "versao_schema": "1.0.0",
+  "projeto": {
+    "titulo_relatorio": "",
+    "area_departamento": "",
+    "responsavel": "",
+    "data_criacao": "",
+    "ultima_atualizacao": "",
+    "objetivo": "",
+    "descricao_geral": "",
+    "fontes_dados": [],
+    "observacoes_gerais": ""
+  },
+  "kpis": [],
+  "queries": [],
+  "relacionamentos": [],
+  "medidas_dax": [],
+  "paginas": [],
+  "glossario": [],
+  "metadados": {
+    "documentado_por": "",
+    "criado_em": "2026-07-01T10:53:49.537Z",
+    "ultima_revisao": "2026-07-01T10:53:49.537Z"
+  }
+}

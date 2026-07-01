@@ -1,0 +1,732 @@
+{
+  "versao_schema": "1.0.0",
+  "projeto": {
+    "titulo_relatorio": "Dashboard Comercial",
+    "area_departamento": "Comercial / Vendas",
+    "responsavel": "Ana Paula Ferreira",
+    "data_criacao": "01/2026",
+    "ultima_atualizacao": "07/2026",
+    "objetivo": "Consolidar os principais indicadores de performance comercial da organização, permitindo o acompanhamento em tempo real do faturamento, atingimento de metas, ticket médio e evolução das vendas por região, produto e vendedor. O relatório apoia a tomada de decisão da gestão comercial e da diretoria executiva.",
+    "descricao_geral": "O Dashboard Comercial centraliza informações oriundas do ERP e do CRM, cobrindo todo o ciclo de vendas: desde o registro do pedido até o faturamento efetivo.\n\nO relatório é atualizado diariamente via Power BI Service e contempla análises por período, região, canal de vendas, linha de produto e vendedor. As metas são importadas de uma planilha Excel gerenciada pela equipe de Planejamento Comercial.\n\nO modelo segue a arquitetura Star Schema, com uma tabela fato de vendas (ftVendas) e tabelas dimensão de clientes, produtos, vendedores, região e tempo. Uma segunda tabela fato (ftMetas) armazena as metas mensais por vendedor e produto, permitindo análises de atingimento.",
+    "fontes_dados": [
+      {
+        "tipo": "SQL Server",
+        "descricao": "ERP Corporativo — base COMERCIAL_PROD"
+      },
+      {
+        "tipo": "Planilha Excel",
+        "descricao": "Metas_Comerciais.xlsx — gerenciada pelo Planejamento Comercial"
+      }
+    ],
+    "observacoes_gerais": "O relatório não contempla vendas canceladas após faturamento. Devoluções e notas de crédito são tratadas como eventos negativos na tabela ftVendas, com o campo TipoMovimento = 'Devolucao'.\n\nAs metas são carregadas manualmente uma vez por mês pela equipe de Planejamento. Em caso de revisão de metas no meio do período, o arquivo Excel deve ser atualizado e o dataset republicado manualmente.\n\nColaboradores com perfil de Vendedor visualizam apenas os dados de sua própria carteira via RLS (Row-Level Security) configurado no Power BI Service.",
+    "melhorias_futuras": [
+      "Implementar RLS dinâmico por hierarquia de gestores (Vendedor → Supervisor → Gerente)",
+      "Adicionar análise de churn de clientes com base na recência de compras",
+      "Integrar dados do CRM para incluir oportunidades e funil de vendas",
+      "Criar página dedicada de análise de rentabilidade por produto e canal",
+      "Automatizar a carga das metas via API da planilha no SharePoint"
+    ]
+  },
+  "kpis": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "nome": "Faturamento Líquido",
+      "tipo_visual": "card",
+      "tipo_outro": "",
+      "o_que_mede": "Soma do valor líquido de todas as vendas efetivadas no período selecionado, descontados impostos, devoluções e cancelamentos.",
+      "objetivo_meta": "Acompanhar a receita líquida gerada pela operação comercial e comparar com a meta do período. Meta anual definida pelo planejamento estratégico.",
+      "formula": "SUM(ftVendas[ValorLiquido]) onde TipoMovimento = 'Venda'",
+      "o_que_entra": "Notas fiscais de venda com status 'Faturado'.\nVendas de todas as filiais e canais (direto, distribuidor, e-commerce).\nMercado interno e exportação.",
+      "o_que_nao_entra": "Devoluções e notas de crédito (TipoMovimento = 'Devolucao').\nPedidos ainda não faturados (status 'Em Carteira' ou 'Aprovado').\nVendas canceladas antes do faturamento.",
+      "excecoes": "Vendas intercompany (entre empresas do mesmo grupo) são incluídas no faturamento bruto, mas excluídas no indicador consolidado de grupo quando o filtro 'Visão Consolidada' está ativo.",
+      "regras_temporais": "Considera a data de faturamento (DataNF), não a data do pedido. Para análises mensais, acumula todas as notas fiscais emitidas dentro do mês selecionado. O comparativo com mês anterior é calculado automaticamente pela medida de variação.",
+      "fonte_dados_kpi": "ERP Corporativo — tabela fato ftVendas",
+      "responsavel_validacao": "Ana Paula Ferreira — Gestão Comercial",
+      "regras_negocio": [
+        "Considera apenas notas fiscais com status 'Faturado' no ERP.",
+        "O valor líquido já desconta IPI, ICMS ST e descontos comerciais concedidos.",
+        "Devoluções reduzem o faturamento no mês em que a nota de devolução é emitida, não no mês da venda original."
+      ],
+      "observacoes": "Principal KPI do relatório. Variações abruptas no indicador podem indicar problemas de integração entre o ERP e o Power BI — verificar se o dataset foi atualizado corretamente antes de interpretar quedas expressivas."
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "nome": "Atingimento de Meta",
+      "tipo_visual": "gauge",
+      "tipo_outro": "",
+      "o_que_mede": "Percentual do faturamento líquido realizado em relação à meta comercial definida para o período selecionado.",
+      "objetivo_meta": "Monitorar se a operação está no ritmo necessário para atingir a meta mensal e anual. Meta mínima aceitável: 90%. Acima de 100% indica superação.",
+      "formula": "DIVIDE([Faturamento Líquido], [Meta do Período], 0)",
+      "o_que_entra": "Faturamento líquido do período.\nMeta comercial aprovada para o mesmo período e granularidade (vendedor, produto, região).",
+      "o_que_nao_entra": "Períodos sem meta cadastrada retornam BLANK — não são tratados como meta zero.",
+      "excecoes": "Meses com revisão de meta aprovada pela diretoria utilizam a meta revisada, não a original. O histórico de revisões não é mantido no modelo atual.",
+      "regras_temporais": "Calculado para o período selecionado nos filtros. Para análise YTD, utiliza a medida específica de Atingimento Acumulado.",
+      "fonte_dados_kpi": "ERP (realizado) e Excel Metas_Comerciais.xlsx (meta)",
+      "responsavel_validacao": "Carlos Mendes — Planejamento Comercial",
+      "regras_negocio": [
+        "A meta é definida mensalmente por vendedor e linha de produto.",
+        "O denominador da divisão é protegido contra zero — retorna BLANK quando não há meta cadastrada.",
+        "Consolidações regionais e de produto somam metas individuais — não há meta agregada separada."
+      ],
+      "observacoes": "O visual de gauge exibe faixas coloridas: vermelho (< 80%), amarelo (80–99%), verde (≥ 100%). Os limites das faixas são parametrizáveis via tabela de configuração no modelo."
+    },
+    {
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "nome": "Ticket Médio",
+      "tipo_visual": "card",
+      "tipo_outro": "",
+      "o_que_mede": "Valor médio de faturamento por pedido/nota fiscal no período selecionado.",
+      "objetivo_meta": "Monitorar a evolução do valor médio por transação, identificando tendências de upsell, downsell ou mudança no mix de produtos.",
+      "formula": "DIVIDE([Faturamento Líquido], [Quantidade de Pedidos], 0)",
+      "o_que_entra": "Faturamento líquido total do período.\nQuantidade de notas fiscais de venda únicas (DISTINCTCOUNT de NFNumero).",
+      "o_que_nao_entra": "Notas de devolução não são contadas como pedidos, mas reduzem o faturamento líquido do numerador.",
+      "excecoes": "Pedidos fracionados em múltiplas notas fiscais (por questão logística ou fiscal) são contados como pedidos distintos, o que pode reduzir artificialmente o ticket médio em períodos com alto volume de fracionamento.",
+      "regras_temporais": "Calculado para o período filtrado. Não acumula — é sempre a média do período selecionado.",
+      "fonte_dados_kpi": "ERP Corporativo — tabela fato ftVendas",
+      "responsavel_validacao": "Ana Paula Ferreira — Gestão Comercial",
+      "regras_negocio": [
+        "Considera a nota fiscal como unidade de pedido.",
+        "O denominador é protegido contra zero via DIVIDE com valor alternativo 0."
+      ],
+      "observacoes": "Quedas no ticket médio combinadas com crescimento em volume de pedidos podem indicar pulverização de clientes ou promoções agressivas — analisar em conjunto com o mix de produtos e canal de venda."
+    },
+    {
+      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "nome": "Crescimento vs. Mês Anterior",
+      "tipo_visual": "kpi_nativo",
+      "tipo_outro": "",
+      "o_que_mede": "Variação percentual do faturamento líquido do mês atual em relação ao mês imediatamente anterior.",
+      "objetivo_meta": "Identificar tendências de crescimento ou retração mês a mês, sinalizando acelerações ou desacelerações na operação comercial.",
+      "formula": "DIVIDE([Faturamento Líquido] - [Faturamento Mês Anterior], [Faturamento Mês Anterior], BLANK())",
+      "o_que_entra": "Faturamento líquido do mês atual (conforme filtro).\nFaturamento líquido do mês imediatamente anterior.",
+      "o_que_nao_entra": "Não é calculado quando não existe mês anterior disponível no modelo (ex: primeiro mês histórico da base).",
+      "excecoes": "Quando o filtro de data abrange múltiplos meses, a medida utiliza o mês mais recente como referência e o penúltimo como base de comparação.",
+      "regras_temporais": "Sempre compara o período atual com o período imediatamente anterior de mesma granularidade (mês vs. mês anterior). Não é uma comparação YoY.",
+      "fonte_dados_kpi": "ERP Corporativo — tabela fato ftVendas",
+      "responsavel_validacao": "Ana Paula Ferreira — Gestão Comercial",
+      "regras_negocio": [
+        "O mês anterior é calculado usando DATEADD ou PREVIOUSMONTH da dimTempo.",
+        "Retorna BLANK quando não há dados para o mês anterior — não exibe zero para não confundir com variação nula."
+      ],
+      "observacoes": "O visual KPI Nativo exibe seta verde (crescimento) ou vermelha (retração) automaticamente. A meta de referência exibida no visual é o faturamento do mês anterior."
+    }
+  ],
+  "queries": [
+    {
+      "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "nome": "ftVendas",
+      "fonte_dados": "sql_server",
+      "fonte_dados_outro": "",
+      "descricao": "Tabela fato central do modelo, contendo todos os eventos de venda e devolução faturados. Cada linha representa um item de nota fiscal, com seu valor líquido, impostos, quantidades e referências às dimensões. É a fonte de todos os KPIs de faturamento, volume e ticket médio.",
+      "codigo": "SELECT\n    NF.NumNF                                    AS NFNumero,\n    NF.DataEmissao                              AS DataNF,\n    NF.TipoMovimento,\n    CONCAT(CLI.CodCli, '.', CLI.CodLoja)        AS PKCliente,\n    CONCAT(PROD.CodDep, '.', PROD.CodPro)       AS PKProduto,\n    CONCAT(VEN.CodEmp, '.', VEN.CodVen)         AS PKVendedor,\n    REG.CodRegiao                               AS PKRegiao,\n    SUM(ITEM.Quantidade)                        AS Quantidade,\n    SUM(ITEM.ValorBruto)                        AS ValorBruto,\n    SUM(ITEM.ValorDesconto)                     AS ValorDesconto,\n    SUM(ITEM.ValorLiquido)                      AS ValorLiquido,\n    SUM(ITEM.ValorIPI)                          AS ValorIPI,\n    SUM(ITEM.ValorICMSST)                       AS ValorICMSST\n\nFROM\n    NotasFiscais NF\n    INNER JOIN ItensNF        ITEM ON NF.NumNF = ITEM.NumNF\n    INNER JOIN Clientes       CLI  ON NF.CodCli = CLI.CodCli AND NF.CodLoja = CLI.CodLoja\n    INNER JOIN Produtos       PROD ON ITEM.CodPro = PROD.CodPro AND ITEM.CodDep = PROD.CodDep\n    INNER JOIN Vendedores     VEN  ON NF.CodVen = VEN.CodVen AND NF.CodEmp = VEN.CodEmp\n    LEFT JOIN  RegiaoCliente  REG  ON CLI.CodRegiao = REG.CodRegiao\n\nWHERE\n    NF.DataEmissao >= '2023-01-01'\n    AND NF.TipoMovimento IN ('Venda', 'Devolucao')\n    AND NF.Status = 'Faturado'\n\nGROUP BY\n    NF.NumNF, NF.DataEmissao, NF.TipoMovimento,\n    CLI.CodCli, CLI.CodLoja,\n    PROD.CodDep, PROD.CodPro,\n    VEN.CodEmp, VEN.CodVen,\n    REG.CodRegiao",
+      "transformacoes": [
+        "= Table.TransformColumnTypes(Fonte, {{\"DataNF\", type date}, {\"Quantidade\", type number}, {\"ValorBruto\", type number}, {\"ValorLiquido\", type number}})",
+        "= Table.AddColumn(TipoAlterado, \"AnoMes\", each Date.Year([DataNF]) * 100 + Date.Month([DataNF]), Int64.Type)"
+      ],
+      "colunas": [
+        {
+          "id": "f1a2b3c4-d5e6-7890-fab1-234567890abc",
+          "nome": "NFNumero",
+          "tipo": "Text",
+          "descricao": "Número da nota fiscal — identificador único do documento fiscal"
+        },
+        {
+          "id": "f2a3b4c5-d6e7-8901-fab2-34567890abcd",
+          "nome": "DataNF",
+          "tipo": "Date",
+          "descricao": "Data de emissão da nota fiscal — base para todos os filtros temporais"
+        },
+        {
+          "id": "f3a4b5c6-d7e8-9012-fab3-4567890abcde",
+          "nome": "TipoMovimento",
+          "tipo": "Text",
+          "descricao": "Classificação do documento: 'Venda' ou 'Devolucao'"
+        },
+        {
+          "id": "f4a5b6c7-d8e9-0123-fab4-567890abcdef",
+          "nome": "PKCliente",
+          "tipo": "Text",
+          "descricao": "Chave do cliente no formato CodCli.CodLoja — relaciona com dimClientes"
+        },
+        {
+          "id": "f5a6b7c8-d9e0-1234-fab5-67890abcdef0",
+          "nome": "PKProduto",
+          "tipo": "Text",
+          "descricao": "Chave do produto no formato CodDep.CodPro — relaciona com dimProdutos"
+        },
+        {
+          "id": "f6a7b8c9-d0e1-2345-fab6-7890abcdef01",
+          "nome": "PKVendedor",
+          "tipo": "Text",
+          "descricao": "Chave do vendedor no formato CodEmp.CodVen — relaciona com dimVendedores"
+        },
+        {
+          "id": "f7a8b9c0-d1e2-3456-fab7-890abcdef012",
+          "nome": "ValorLiquido",
+          "tipo": "Decimal",
+          "descricao": "Valor líquido do item após descontos — base para o KPI de Faturamento"
+        },
+        {
+          "id": "f8a9b0c1-d2e3-4567-fab8-90abcdef0123",
+          "nome": "Quantidade",
+          "tipo": "Decimal",
+          "descricao": "Quantidade de unidades vendidas ou devolvidas"
+        }
+      ],
+      "observacoes": "A query agrupa por nota fiscal e item para reduzir a granularidade e melhorar a performance no Power BI. O filtro de data ('2023-01-01') define o horizonte histórico — deve ser revisado anualmente. A ausência de LEFT JOIN na tabela de produtos pode excluir itens descontinuados se não estiverem na dimensão ativa."
+    },
+    {
+      "id": "a6b7c8d9-e0f1-2345-abcd-456789012345",
+      "nome": "ftMetas",
+      "fonte_dados": "excel_csv",
+      "fonte_dados_outro": "",
+      "descricao": "Tabela fato de metas comerciais, carregada a partir da planilha Metas_Comerciais.xlsx gerenciada pelo Planejamento Comercial. Contém as metas mensais por vendedor e linha de produto, sendo a base para os KPIs de atingimento.",
+      "codigo": "let\n    Fonte = Excel.Workbook(File.Contents(\"C:/BI/Comercial/Metas_Comerciais.xlsx\"), null, true),\n    Metas_Table = Fonte{[Item=\"Metas\", Kind=\"Table\"]}[Data]\nin\n    Metas_Table",
+      "transformacoes": [
+        "= Table.TransformColumnTypes(Fonte, {{\"AnoCom\", Int64.Type}, {\"MesCom\", Int64.Type}, {\"MetaValor\", type number}})",
+        "= Table.AddColumn(TipoAlterado, \"AnoMes\", each [AnoCom] * 100 + [MesCom], Int64.Type)",
+        "= Table.AddColumn(AnoMesAdd, \"PKVendedor\", each Text.From([CodEmp]) & \".\" & Text.From([CodVen]), type text)"
+      ],
+      "colunas": [
+        {
+          "id": "a1b2c3d4-e5f6-7890-aabb-112233445566",
+          "nome": "AnoMes",
+          "tipo": "INT",
+          "descricao": "Chave temporal no formato AAAAMM para relacionamento com dimTempo"
+        },
+        {
+          "id": "a2b3c4d5-e6f7-8901-aabb-223344556677",
+          "nome": "PKVendedor",
+          "tipo": "Text",
+          "descricao": "Chave do vendedor — deve corresponder exatamente ao PKVendedor da ftVendas"
+        },
+        {
+          "id": "a3b4c5d6-e7f8-9012-aabb-334455667788",
+          "nome": "MetaValor",
+          "tipo": "Decimal",
+          "descricao": "Valor da meta em reais para o vendedor no mês de referência"
+        }
+      ],
+      "observacoes": "O caminho do arquivo é hardcoded — em ambiente de produção recomenda-se migrar para SharePoint ou substituir por query parametrizada. Revisões de meta no meio do mês exigem atualização manual da planilha e republicação do dataset."
+    },
+    {
+      "id": "b7c8d9e0-f1a2-3456-bcde-567890123456",
+      "nome": "dimClientes",
+      "fonte_dados": "sql_server",
+      "fonte_dados_outro": "",
+      "descricao": "Dimensão de clientes contendo informações cadastrais, segmentação por porte, região, canal de atendimento e classificação ABC. Utilizada para análises de carteira, concentração e perfil da base de clientes.",
+      "codigo": "SELECT\n    CONCAT(CLI.CodCli, '.', CLI.CodLoja)    AS PKCliente,\n    CLI.NomCli                              AS NomeCliente,\n    CLI.CNPJ,\n    CLI.CidCli                              AS Cidade,\n    CLI.EstCli                              AS Estado,\n    REG.DesRegiao                           AS Regiao,\n    SEG.DesSegmento                         AS Segmento,\n    CASE\n        WHEN CLI.FatAnual >= 5000000  THEN 'Grande'\n        WHEN CLI.FatAnual >= 500000   THEN 'Medio'\n        ELSE 'Pequeno'\n    END                                     AS Porte,\n    COALESCE(ABC.ClassABC, 'D')             AS ClassificacaoABC\n\nFROM\n    Clientes         CLI\n    LEFT JOIN Regioes    REG ON CLI.CodRegiao = REG.CodRegiao\n    LEFT JOIN Segmentos  SEG ON CLI.CodSegmento = SEG.CodSegmento\n    LEFT JOIN ClienteABC ABC ON CLI.CodCli = ABC.CodCli\n\nWHERE\n    CLI.Ativo = 'S'",
+      "transformacoes": [],
+      "colunas": [
+        {
+          "id": "b1c2d3e4-f5a6-7890-bbcc-112233445566",
+          "nome": "PKCliente",
+          "tipo": "Text",
+          "descricao": "Chave primária da dimensão — relaciona com ftVendas[PKCliente]"
+        },
+        {
+          "id": "b2c3d4e5-f6a7-8901-bbcc-223344556677",
+          "nome": "ClassificacaoABC",
+          "tipo": "Text",
+          "descricao": "Classificação ABC do cliente baseada em faturamento anual — A (top 20%), B (20–50%), C (50–80%), D (restante)"
+        },
+        {
+          "id": "b3c4d5e6-f7a8-9012-bbcc-334455667788",
+          "nome": "Porte",
+          "tipo": "Text",
+          "descricao": "Segmentação por porte baseada no faturamento anual declarado: Grande, Médio ou Pequeno"
+        }
+      ],
+      "observacoes": "A query filtra apenas clientes ativos. Clientes inativos que ainda possuem histórico de vendas aparecem na ftVendas mas não na dimensão — isso pode causar linhas em branco nos visuais se não houver tratamento no modelo."
+    },
+    {
+      "id": "c8d9e0f1-a2b3-4567-cdef-678901234567",
+      "nome": "dimProdutos",
+      "fonte_dados": "sql_server",
+      "fonte_dados_outro": "",
+      "descricao": "Dimensão de produtos com hierarquia de categorização (Família → Linha → Produto), margem de contribuição média e indicadores de atividade. Permite análises de mix de vendas, rentabilidade por categoria e performance de linha.",
+      "codigo": "SELECT\n    CONCAT(PRD.CodDep, '.', PRD.CodPro)     AS PKProduto,\n    PRD.DesPro                              AS NomeProduto,\n    PRD.CodBarras,\n    LIN.DesLinha                            AS Linha,\n    FAM.DesFamilia                          AS Familia,\n    PRD.PercMargem                          AS MargemMedia,\n    CASE\n        WHEN PRD.DtUltVenda >= DATEADD(MONTH, -3, GETDATE()) THEN 'Ativo'\n        WHEN PRD.DtUltVenda >= DATEADD(MONTH, -6, GETDATE()) THEN 'Baixo Giro'\n        ELSE 'Inativo'\n    END                                     AS StatusGiro\n\nFROM\n    Produtos     PRD\n    LEFT JOIN LinhasProduto LIN ON PRD.CodLinha = LIN.CodLinha\n    LEFT JOIN Familias     FAM ON LIN.CodFamilia = FAM.CodFamilia",
+      "transformacoes": [
+        "= Table.TransformColumnTypes(Fonte, {{\"MargemMedia\", type number}})"
+      ],
+      "colunas": [
+        {
+          "id": "c1d2e3f4-a5b6-7890-ccdd-112233445566",
+          "nome": "PKProduto",
+          "tipo": "Text",
+          "descricao": "Chave primária da dimensão no formato CodDep.CodPro"
+        },
+        {
+          "id": "c2d3e4f5-a6b7-8901-ccdd-223344556677",
+          "nome": "StatusGiro",
+          "tipo": "Text",
+          "descricao": "Classificação de atividade baseada na data da última venda: Ativo (< 3 meses), Baixo Giro (3–6 meses), Inativo (> 6 meses)"
+        },
+        {
+          "id": "c3d4e5f6-a7b8-9012-ccdd-334455667788",
+          "nome": "MargemMedia",
+          "tipo": "Decimal",
+          "descricao": "Margem de contribuição média percentual do produto — utilizada em análises de rentabilidade"
+        }
+      ],
+      "observacoes": "O cálculo de StatusGiro é dinâmico no SQL e reflete o estado atual no momento da atualização. Para histórico de giro em datas específicas seria necessário uma tabela de snapshots mensais."
+    },
+    {
+      "id": "d9e0f1a2-b3c4-5678-defa-789012345678",
+      "nome": "dimTempo",
+      "fonte_dados": "outro",
+      "fonte_dados_outro": "Power Query",
+      "descricao": "Dimensão de tempo gerada via Power Query, cobrindo todos os dias do período histórico do relatório. Contém atributos de dia, semana, mês, trimestre, semestre e ano, além de classificações de dia útil e feriado. É a tabela de datas padrão do modelo.",
+      "codigo": "let\n    DataInicio = #date(2023, 1, 1),\n    DataFim    = Date.From(DateTime.FixedLocalNow()),\n    Duracao    = Duration.Days(DataFim - DataInicio) + 1,\n    Fonte      = List.Dates(DataInicio, Duracao, #duration(1, 0, 0, 0)),\n    Tabela     = Table.FromList(Fonte, Splitter.SplitByNothing(), {\"Data\"}),\n    TipoData   = Table.TransformColumnTypes(Tabela, {{\"Data\", type date}}),\n    AddAno     = Table.AddColumn(TipoData,  \"Ano\",       each Date.Year([Data]),          Int64.Type),\n    AddMes     = Table.AddColumn(AddAno,    \"Mes\",       each Date.Month([Data]),         Int64.Type),\n    AddNomeMes = Table.AddColumn(AddMes,    \"NomeMes\",   each Text.Proper(Date.MonthName([Data])), type text),\n    AddTrim    = Table.AddColumn(AddNomeMes,\"Trimestre\", each Date.QuarterOfYear([Data]), Int64.Type),\n    AddAnoMes  = Table.AddColumn(AddTrim,   \"AnoMes\",    each Date.Year([Data]) * 100 + Date.Month([Data]), Int64.Type)\nin\n    AddAnoMes",
+      "transformacoes": [],
+      "colunas": [
+        {
+          "id": "d1e2f3a4-b5c6-7890-ddee-112233445566",
+          "nome": "Data",
+          "tipo": "Date",
+          "descricao": "Data base da dimensão — chave primária para relacionamentos com tabelas fato"
+        },
+        {
+          "id": "d2e3f4a5-b6c7-8901-ddee-223344556677",
+          "nome": "AnoMes",
+          "tipo": "INT",
+          "descricao": "Chave no formato AAAAMM para relacionamento com ftMetas"
+        },
+        {
+          "id": "d3e4f5a6-b7c8-9012-ddee-334455667788",
+          "nome": "Trimestre",
+          "tipo": "INT",
+          "descricao": "Número do trimestre (1 a 4)"
+        }
+      ],
+      "observacoes": "A data máxima é dinâmica (data atual). Para análises de meses futuros com metas cadastradas, estender DataFim para o final do ano fiscal."
+    }
+  ],
+  "relacionamentos": [
+    {
+      "id": "e0f1a2b3-c4d5-6789-efab-890123456789",
+      "tabela_origem": "ftVendas",
+      "tabela_destino": "dimTempo",
+      "coluna_origem": "DataNF",
+      "coluna_destino": "Data",
+      "cardinalidade": "muitos_para_um",
+      "direcao": "unica",
+      "ativo": true,
+      "temporario": false,
+      "observacoes": "Relacionamento principal de tempo. Ativo e com direção única para evitar ambiguidade com possíveis relacionamentos de datas de entrega futuros."
+    },
+    {
+      "id": "f1a2b3c4-d5e6-7890-fabc-901234567890",
+      "tabela_origem": "ftVendas",
+      "tabela_destino": "dimClientes",
+      "coluna_origem": "PKCliente",
+      "coluna_destino": "PKCliente",
+      "cardinalidade": "muitos_para_um",
+      "direcao": "unica",
+      "ativo": true,
+      "temporario": false,
+      "observacoes": "Clientes sem cadastro ativo na dimensão aparecem como BLANK nos visuais segmentados por cliente."
+    },
+    {
+      "id": "a2b3c4d5-e6f7-8901-abcd-012345678901",
+      "tabela_origem": "ftVendas",
+      "tabela_destino": "dimProdutos",
+      "coluna_origem": "PKProduto",
+      "coluna_destino": "PKProduto",
+      "cardinalidade": "muitos_para_um",
+      "direcao": "unica",
+      "ativo": true,
+      "temporario": false,
+      "observacoes": ""
+    },
+    {
+      "id": "b3c4d5e6-f7a8-9012-bcde-123456789012",
+      "tabela_origem": "ftMetas",
+      "tabela_destino": "dimTempo",
+      "coluna_origem": "AnoMes",
+      "coluna_destino": "AnoMes",
+      "cardinalidade": "muitos_para_um",
+      "direcao": "unica",
+      "ativo": true,
+      "temporario": false,
+      "observacoes": "Relacionamento via AnoMes (AAAAMM) pois as metas têm granularidade mensal, não diária."
+    },
+    {
+      "id": "c4d5e6f7-a8b9-0123-cdef-234567890123",
+      "tabela_origem": "ftVendas",
+      "tabela_destino": "dimClientes",
+      "coluna_origem": "PKCliente",
+      "coluna_destino": "PKCliente",
+      "cardinalidade": "muitos_para_um",
+      "direcao": "bidirecional",
+      "ativo": false,
+      "temporario": true,
+      "observacoes": "Relacionamento bidirecional temporário, utilizado via USERELATIONSHIP em medidas específicas de análise de carteira que precisam filtrar fatos a partir da dimensão de clientes."
+    }
+  ],
+  "medidas_dax": [
+    {
+      "id": "d5e6f7a8-b9c0-1234-defa-345678901234",
+      "nome": "Faturamento Líquido",
+      "tabela": "_Medidas",
+      "descricao": "Faturamento líquido total do período, considerando apenas notas de venda (excluindo devoluções). Medida base do modelo — quase todas as outras medidas dependem desta.",
+      "formula": "Faturamento Líquido =\nCALCULATE(\n    SUM(ftVendas[ValorLiquido]),\n    ftVendas[TipoMovimento] = \"Venda\"\n)",
+      "dependencias": [],
+      "kpis_relacionados": [
+        "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      ],
+      "comportamento_esperado": "Comparar o valor retornado com a soma do campo ValorLiquido na ftVendas filtrada por TipoMovimento = 'Venda' diretamente no SQL. Qualquer discrepância indica problema de relacionamento ou filtro de contexto.",
+      "query_validacao": "SELECT\n    FORMAT(DataNF, 'yyyy-MM') AS AnoMes,\n    SUM(ValorLiquido)         AS FaturamentoLiquido\nFROM ftVendas\nWHERE TipoMovimento = 'Venda'\nGROUP BY FORMAT(DataNF, 'yyyy-MM')\nORDER BY 1"
+    },
+    {
+      "id": "e6f7a8b9-c0d1-2345-efab-456789012345",
+      "nome": "Faturamento Mês Anterior",
+      "tabela": "_Medidas",
+      "descricao": "Faturamento líquido do mês imediatamente anterior ao período selecionado. Utilizada como base para o cálculo de variação e como target no visual KPI Nativo.",
+      "formula": "Faturamento Mês Anterior =\nCALCULATE(\n    [Faturamento Líquido],\n    PREVIOUSMONTH(dimTempo[Data])\n)",
+      "dependencias": [
+        "d5e6f7a8-b9c0-1234-defa-345678901234"
+      ],
+      "kpis_relacionados": [
+        "d4e5f6a7-b8c9-0123-defa-234567890123"
+      ],
+      "comportamento_esperado": "Com o filtro em Março/2026, a medida deve retornar o faturamento de Fevereiro/2026. Validar cruzando diretamente na ftVendas com filtro de data explícito.",
+      "query_validacao": ""
+    },
+    {
+      "id": "f7a8b9c0-d1e2-3456-fabc-567890123456",
+      "nome": "Meta do Período",
+      "tabela": "_Medidas",
+      "descricao": "Soma das metas comerciais cadastradas para o período selecionado. Considera apenas a dimensão de tempo e vendedor no contexto de filtro.",
+      "formula": "Meta do Período =\nSUM(ftMetas[MetaValor])",
+      "dependencias": [],
+      "kpis_relacionados": [
+        "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+      ],
+      "comportamento_esperado": "Com filtro no mês de Janeiro/2026 e um vendedor específico, deve retornar exatamente o valor cadastrado na planilha de metas para aquela combinação. Se retornar BLANK, a combinação AnoMes + PKVendedor não existe na ftMetas.",
+      "query_validacao": ""
+    },
+    {
+      "id": "a8b9c0d1-e2f3-4567-abcd-678901234567",
+      "nome": "% Atingimento de Meta",
+      "tabela": "_Medidas",
+      "descricao": "Percentual de atingimento da meta comercial no período. Retorna BLANK quando não há meta cadastrada para evitar distorção nos visuais.",
+      "formula": "% Atingimento de Meta =\nDIVIDE(\n    [Faturamento Líquido],\n    [Meta do Período]\n)",
+      "dependencias": [
+        "d5e6f7a8-b9c0-1234-defa-345678901234",
+        "f7a8b9c0-d1e2-3456-fabc-567890123456"
+      ],
+      "kpis_relacionados": [
+        "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+      ],
+      "comportamento_esperado": "Com Faturamento = R$ 850.000 e Meta = R$ 1.000.000, deve retornar 85% (0,85). O visual de gauge deve exibir a cor amarela (entre 80% e 99%). Com Meta = BLANK, deve retornar BLANK.",
+      "query_validacao": ""
+    },
+    {
+      "id": "b9c0d1e2-f3a4-5678-bcde-789012345678",
+      "nome": "Ticket Médio",
+      "tabela": "_Medidas",
+      "descricao": "Valor médio por nota fiscal de venda no período. Calculado como faturamento líquido dividido pela contagem distinta de notas fiscais.",
+      "formula": "Ticket Médio =\nDIVIDE(\n    [Faturamento Líquido],\n    CALCULATE(\n        DISTINCTCOUNT(ftVendas[NFNumero]),\n        ftVendas[TipoMovimento] = \"Venda\"\n    ),\n    0\n)",
+      "dependencias": [
+        "d5e6f7a8-b9c0-1234-defa-345678901234"
+      ],
+      "kpis_relacionados": [
+        "c3d4e5f6-a7b8-9012-cdef-123456789012"
+      ],
+      "comportamento_esperado": "Dividir o faturamento total pelo número de notas fiscais de venda do período. Selecionar 10 notas aleatórias do SQL e calcular a média manualmente para validar o resultado global.",
+      "query_validacao": "SELECT\n    COUNT(DISTINCT NFNumero)         AS QtdNotas,\n    SUM(ValorLiquido)                AS Faturamento,\n    SUM(ValorLiquido)\n        / COUNT(DISTINCT NFNumero)   AS TicketMedio\nFROM ftVendas\nWHERE TipoMovimento = 'Venda'\n  AND DataNF BETWEEN '2026-01-01' AND '2026-01-31'"
+    },
+    {
+      "id": "c0d1e2f3-a4b5-6789-cdef-890123456789",
+      "nome": "Faturamento YTD",
+      "tabela": "_Medidas",
+      "descricao": "Faturamento líquido acumulado desde o início do ano até o último dia do período selecionado. Utilizado para análises de performance anual e projeção de fechamento.",
+      "formula": "Faturamento YTD =\nCALCULATE(\n    [Faturamento Líquido],\n    DATESYTD(dimTempo[Data])\n)",
+      "dependencias": [
+        "d5e6f7a8-b9c0-1234-defa-345678901234"
+      ],
+      "kpis_relacionados": [
+        "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      ],
+      "comportamento_esperado": "Com filtro em Março/2026, deve retornar a soma do faturamento de Janeiro + Fevereiro + Março/2026. Confirmar somando os três meses individualmente.",
+      "query_validacao": ""
+    }
+  ],
+  "paginas": [
+    {
+      "id": "d1e2f3a4-b5c6-7890-defa-901234567890",
+      "titulo": "Visão Geral",
+      "objetivo": "Apresentar os principais KPIs comerciais do período selecionado em um painel executivo, permitindo avaliação rápida da performance de faturamento, atingimento de meta e ticket médio.",
+      "descricao": "Página principal do dashboard, projetada para uso pela gestão comercial e diretoria. Exibe indicadores consolidados no topo, seguidos de um gráfico de evolução mensal do faturamento vs. meta e uma tabela de ranking por vendedor. Todos os visuais respondem ao filtro de período e região.",
+      "captura": {
+        "arquivo": "img_visao-geral_pagina.png",
+        "caminho": "imagens/paginas/img_visao-geral_pagina.png"
+      },
+      "visuais": [
+        {
+          "id": "e2f3a4b5-c6d7-8901-efab-012345678901",
+          "nome": "Faturamento Líquido",
+          "tipo": "cartao",
+          "tipo_outro": "",
+          "objetivo": "Exibir o faturamento líquido total do período com comparativo vs. mês anterior.",
+          "descricao": "Cartão com o faturamento líquido do período filtrado, exibindo o valor absoluto e a variação percentual em relação ao mês anterior em formato de tendência.",
+          "kpis_ids": [
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          ],
+          "medidas_ids": [
+            "d5e6f7a8-b9c0-1234-defa-345678901234",
+            "e6f7a8b9-c0d1-2345-efab-456789012345"
+          ],
+          "tabelas_ids": [],
+          "campos": [],
+          "observacoes": "",
+          "captura": {
+            "arquivo": "img_visao-geral_faturamento-liquido_visual.png",
+            "caminho": "imagens/visuais/img_visao-geral_faturamento-liquido_visual.png"
+          }
+        },
+        {
+          "id": "f3a4b5c6-d7e8-9012-fabc-123456789012",
+          "nome": "Atingimento de Meta",
+          "tipo": "gauge",
+          "tipo_outro": "",
+          "objetivo": "Visualizar o percentual de atingimento da meta do período em formato gauge com faixas de cor.",
+          "descricao": "Gauge exibindo o % de atingimento da meta. Faixas: vermelho (< 80%), amarelo (80–99%), verde (≥ 100%). O valor mínimo do gauge é 0% e o máximo é 150% para acomodar superações expressivas.",
+          "kpis_ids": [
+            "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+          ],
+          "medidas_ids": [
+            "a8b9c0d1-e2f3-4567-abcd-678901234567"
+          ],
+          "tabelas_ids": [],
+          "campos": [],
+          "observacoes": "",
+          "captura": {
+            "arquivo": "img_visao-geral_atingimento-de-meta_visual.png",
+            "caminho": "imagens/visuais/img_visao-geral_atingimento-de-meta_visual.png"
+          }
+        },
+        {
+          "id": "a4b5c6d7-e8f9-0123-abcd-234567890123",
+          "nome": "Evolução Faturamento vs Meta",
+          "tipo": "colunasAgrupadasLinha",
+          "tipo_outro": "",
+          "objetivo": "Comparar a evolução mensal do faturamento realizado versus a meta mensal nos últimos 12 meses.",
+          "descricao": "Gráfico combinado com colunas para o faturamento realizado e linha para a meta do período, segmentado por mês. Permite identificar tendências sazonais e meses com desvio expressivo entre realizado e planejado.",
+          "kpis_ids": [
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+          ],
+          "medidas_ids": [
+            "d5e6f7a8-b9c0-1234-defa-345678901234",
+            "f7a8b9c0-d1e2-3456-fabc-567890123456"
+          ],
+          "tabelas_ids": [
+            "d9e0f1a2-b3c4-5678-defa-789012345678"
+          ],
+          "campos": [
+            "NomeMes",
+            "Ano"
+          ],
+          "observacoes": "O eixo Y primário (colunas) é o faturamento em R$. O eixo Y secundário (linha) é a meta, também em R$. Ambos na mesma escala para facilitar comparação visual.",
+          "captura": {
+            "arquivo": "img_visao-geral_evolucao-faturamento-vs-meta_visual.png",
+            "caminho": "imagens/visuais/img_visao-geral_evolucao-faturamento-vs-meta_visual.png"
+          }
+        },
+        {
+          "id": "b5c6d7e8-f9a0-1234-bcde-345678901234",
+          "nome": "Ranking de Vendedores",
+          "tipo": "barrasClusterizado",
+          "tipo_outro": "",
+          "objetivo": "Identificar os vendedores com maior faturamento no período e seu percentual de atingimento de meta.",
+          "descricao": "Gráfico de barras horizontais ordenado decrescentemente por faturamento líquido, exibindo o nome do vendedor, o valor realizado e o percentual de atingimento de meta. Limitado ao Top 10 por padrão para manter legibilidade.",
+          "kpis_ids": [
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+          ],
+          "medidas_ids": [
+            "d5e6f7a8-b9c0-1234-defa-345678901234",
+            "a8b9c0d1-e2f3-4567-abcd-678901234567"
+          ],
+          "tabelas_ids": [],
+          "campos": [
+            "NomeVendedor"
+          ],
+          "observacoes": "Em contexto de RLS, cada vendedor visualiza apenas sua própria barra. Gerentes visualizam todos os vendedores da sua equipe.",
+          "captura": {
+            "arquivo": "img_visao-geral_ranking-de-vendedores_visual.png",
+            "caminho": "imagens/visuais/img_visao-geral_ranking-de-vendedores_visual.png"
+          }
+        }
+      ],
+      "filtros": [
+        {
+          "id": "c6d7e8f9-a0b1-2345-cdef-456789012345",
+          "nome": "Período",
+          "tipo": "slicer",
+          "campo": "dimTempo[Data]",
+          "descricao": "Slicer de data com seleção por intervalo. Por padrão exibe o mês atual. Afeta todos os visuais da página.",
+          "visuais_afetados": [
+            "e2f3a4b5-c6d7-8901-efab-012345678901",
+            "f3a4b5c6-d7e8-9012-fabc-123456789012",
+            "a4b5c6d7-e8f9-0123-abcd-234567890123",
+            "b5c6d7e8-f9a0-1234-bcde-345678901234"
+          ],
+          "observacoes": ""
+        },
+        {
+          "id": "d7e8f9a0-b1c2-3456-defa-567890123456",
+          "nome": "Região",
+          "tipo": "slicer",
+          "campo": "dimClientes[Regiao]",
+          "descricao": "Slicer de seleção múltipla por região. Permite analisar a performance de uma ou mais regiões comerciais isoladamente.",
+          "visuais_afetados": [
+            "e2f3a4b5-c6d7-8901-efab-012345678901",
+            "f3a4b5c6-d7e8-9012-fabc-123456789012",
+            "a4b5c6d7-e8f9-0123-abcd-234567890123",
+            "b5c6d7e8-f9a0-1234-bcde-345678901234"
+          ],
+          "observacoes": ""
+        },
+        {
+          "id": "e8f9a0b1-c2d3-4567-efab-678901234567",
+          "nome": "Ano",
+          "tipo": "filtro_relatorio",
+          "campo": "dimTempo[Ano]",
+          "descricao": "Filtro de relatório aplicado automaticamente para limitar os dados ao ano atual e ao ano anterior. Evita que dados históricos mais antigos impactem o desempenho de carregamento.",
+          "visuais_afetados": [],
+          "observacoes": "Filtro de relatório — aplica-se a todas as páginas. Ajustar quando análises históricas de anos anteriores forem necessárias."
+        }
+      ]
+    },
+    {
+      "id": "f9a0b1c2-d3e4-5678-fabc-789012345678",
+      "titulo": "Análise por Produto",
+      "objetivo": "Analisar a performance de vendas por linha de produto, família e SKU, identificando os itens de maior faturamento, melhor margem e tendência de crescimento.",
+      "descricao": "Página focada no mix de produtos e rentabilidade. Permite ao gestor identificar quais linhas e produtos contribuem mais para o faturamento, quais possuem maior margem de contribuição e quais estão com giro baixo ou em declínio. Complementa a análise da página Visão Geral com drill-down na dimensão de produtos.",
+      "captura": {
+        "arquivo": "img_analise-por-produto_pagina.png",
+        "caminho": "imagens/paginas/img_analise-por-produto_pagina.png"
+      },
+      "visuais": [
+        {
+          "id": "a0b1c2d3-e4f5-6789-abcd-890123456789",
+          "nome": "Faturamento por Família",
+          "tipo": "treemap",
+          "tipo_outro": "",
+          "objetivo": "Visualizar a participação de cada família de produtos no faturamento total de forma proporcional.",
+          "descricao": "Treemap com cada retângulo representando uma família de produtos, dimensionado pelo faturamento líquido. A intensidade de cor representa o percentual de atingimento de meta daquela família — verde para acima da meta, vermelho para abaixo.",
+          "kpis_ids": [
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+          ],
+          "medidas_ids": [
+            "d5e6f7a8-b9c0-1234-defa-345678901234",
+            "a8b9c0d1-e2f3-4567-abcd-678901234567"
+          ],
+          "tabelas_ids": [
+            "c8d9e0f1-a2b3-4567-cdef-678901234567"
+          ],
+          "campos": [
+            "Familia",
+            "Linha"
+          ],
+          "observacoes": "",
+          "captura": {
+            "arquivo": "img_analise-por-produto_faturamento-por-familia_visual.png",
+            "caminho": "imagens/visuais/img_analise-por-produto_faturamento-por-familia_visual.png"
+          }
+        },
+        {
+          "id": "b1c2d3e4-f5a6-7890-bcde-901234567890",
+          "nome": "Top 10 Produtos",
+          "tipo": "tabela",
+          "tipo_outro": "",
+          "objetivo": "Listar os 10 produtos com maior faturamento no período com suas métricas principais.",
+          "descricao": "Tabela com os 10 produtos de maior faturamento, exibindo nome do produto, linha, faturamento líquido, quantidade vendida, ticket médio e margem de contribuição média. Ordenada decrescentemente por faturamento.",
+          "kpis_ids": [
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "c3d4e5f6-a7b8-9012-cdef-123456789012"
+          ],
+          "medidas_ids": [
+            "d5e6f7a8-b9c0-1234-defa-345678901234",
+            "b9c0d1e2-f3a4-5678-bcde-789012345678"
+          ],
+          "tabelas_ids": [
+            "c8d9e0f1-a2b3-4567-cdef-678901234567"
+          ],
+          "campos": [
+            "NomeProduto",
+            "Linha",
+            "Familia",
+            "MargemMedia",
+            "StatusGiro"
+          ],
+          "observacoes": "O TopN de 10 é aplicado via filtro de visual no Power BI. Para análise completa, o usuário pode remover o filtro de TopN ou exportar para Excel.",
+          "captura": {
+            "arquivo": "img_analise-por-produto_top-10-produtos_visual.png",
+            "caminho": "imagens/visuais/img_analise-por-produto_top-10-produtos_visual.png"
+          }
+        }
+      ],
+      "filtros": [
+        {
+          "id": "c2d3e4f5-a6b7-8901-cdef-012345678901",
+          "nome": "Linha de Produto",
+          "tipo": "slicer",
+          "campo": "dimProdutos[Linha]",
+          "descricao": "Slicer de seleção múltipla por linha de produto. Permite análise focada em uma ou mais linhas específicas.",
+          "visuais_afetados": [
+            "a0b1c2d3-e4f5-6789-abcd-890123456789",
+            "b1c2d3e4-f5a6-7890-bcde-901234567890"
+          ],
+          "observacoes": ""
+        }
+      ]
+    }
+  ],
+  "glossario": [
+    {
+      "id": "d3e4f5a6-b7c8-9012-defa-123456789012",
+      "termo": "Faturamento Líquido",
+      "definicao": "Receita de vendas após deducões de impostos (IPI, ICMS ST), descontos comerciais e devoluções. Representa o valor efetivamente reconhecido como receita pela operação comercial."
+    },
+    {
+      "id": "e4f5a6b7-c8d9-0123-efab-234567890123",
+      "termo": "Ticket Médio",
+      "definicao": "Valor médio por transação (nota fiscal) em determinado período. Calculado como Faturamento Líquido dividido pela quantidade de notas fiscais de venda. Indica o valor médio que cada cliente gasta por compra."
+    },
+    {
+      "id": "f5a6b7c8-d9e0-1234-fabc-345678901234",
+      "termo": "Atingimento de Meta",
+      "definicao": "Percentual do faturamento realizado em relação à meta comercial definida para o período. Valores acima de 100% indicam superação da meta."
+    },
+    {
+      "id": "a6b7c8d9-e0f1-2345-abcd-456789012345",
+      "termo": "Classificação ABC",
+      "definicao": "Segmentação de clientes por importância estratégica baseada em faturamento anual. A = top 20% dos clientes (maior faturamento), B = 20% a 50%, C = 50% a 80%, D = demais clientes."
+    },
+    {
+      "id": "b7c8d9e0-f1a2-3456-bcde-567890123456",
+      "termo": "YTD (Year to Date)",
+      "definicao": "Acumulado do ano até a data de referência. Ex: Faturamento YTD em Março representa a soma do faturamento de Janeiro, Fevereiro e Março."
+    },
+    {
+      "id": "c8d9e0f1-a2b3-4567-cdef-678901234567",
+      "termo": "RLS (Row-Level Security)",
+      "definicao": "Segurança em nível de linha no Power BI Service. Restringe os dados visíveis a cada usuário com base em regras definidas no modelo. No contexto deste relatório, vendedores visualizam apenas seus próprios dados."
+    },
+    {
+      "id": "d9e0f1a2-b3c4-5678-defa-789012345678",
+      "termo": "Star Schema",
+      "definicao": "Modelo dimensional de dados composto por uma tabela fato central conectada a tabelas dimensão ao redor. É o padrão recomendado para modelos Power BI por oferecer melhor performance e clareza na escrita de medidas DAX."
+    }
+  ],
+  "metadados": {
+    "documentado_por": "Ana Paula Ferreira",
+    "criado_em": "2026-07-01T10:53:49.537Z",
+    "ultima_revisao": "2026-07-01T11:40:30.415Z"
+  }
+}
